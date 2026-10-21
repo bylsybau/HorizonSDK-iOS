@@ -1,0 +1,44 @@
+name: Build Unsigned IPA
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26.4
+        run: sudo xcode-select -s /Applications/Xcode_26.4.app
+
+      - name: Build HorizonSDK-Swift (unsigned)
+        run: |
+          xcodebuild \
+            -project "Examples/SwiftHorizonSDKDemo/SwiftHorizonSDKDemo.xcodeproj" \
+            -target "HorizonSDK-Swift" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            SWIFT_VERSION=5.0 \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "build/Build/Products/Release-iphoneos/HorizonSDK-Swift.app" "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP"
+          zip -r "HorizonSDK-Swift-unsigned.ipa" Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HorizonSDK-Swift-unsigned
+          path: ${{ runner.temp }}/HorizonSDK-Swift-unsigned.ipa
