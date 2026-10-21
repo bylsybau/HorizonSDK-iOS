@@ -12,141 +12,96 @@ workflows:
     cache:
       cache_paths:
         - ~/Library/Developer/Xcode/DerivedData
-        - $HOME/.swiftpm
 
     scripts:
-      # ============================================================
-      # STEP 1: DIAGNOSA LINGKUNGAN
-      # ============================================================
+      # Step 1: Diagnose
       - name: Diagnose environment
         script: |
           set -uo pipefail
-          echo "=========================================="
-          echo "== Xcode & SDK =="
-          echo "=========================================="
+          echo "=== Xcode & SDK ==="
           xcodebuild -version || true
           xcrun --sdk iphoneos --show-sdk-version || true
-          xcrun --sdk iphoneos --show-sdk-path || true
           echo ""
-          echo "=========================================="
-          echo "== Repo structure =="
-          echo "=========================================="
-          pwd
-          ls -la
-          echo ""
-          echo "== Project path =="
-          ls -la "$PROJECT_PATH" || echo "❌ PROJECT TIDAK DITEMUKAN"
-          echo ""
-          echo "== Source dir =="
-          ls -la "$SRC_DIR" || echo "❌ SRC DIR TIDAK DITEMUKAN"
+          echo "=== Project structure ==="
+          ls -la "$SRC_DIR" || echo "❌ SRC tidak ditemukan"
+          ls -la "$PROJECT_PATH" || echo "❌ PROJECT tidak ditemukan"
 
-      # ============================================================
-      # STEP 2: DIAGNOSA SCHEME & TARGET
-      # ============================================================
+      # Step 2: Diagnose schemes
       - name: Diagnose schemes and targets
         script: |
           set -uo pipefail
-          echo "=========================================="
-          echo "== Available schemes & targets =="
-          echo "=========================================="
           xcodebuild -project "$PROJECT_PATH" -list || true
-          echo ""
-          echo "== Shared schemes on disk =="
-          ls -la "$PROJECT_PATH/xcshareddata/xcschemes/" 2>/dev/null || \
-            echo "(tidak ada folder xcshareddata/xcschemes)"
 
-      # ============================================================
-      # STEP 3: AUTO-MIGRATE API SWIFT LAMA (COMPREHENSIVE)
-      # ============================================================
+      # Step 3: Rewrite AppDelegate.swift completely (safest approach)
+      - name: Rewrite AppDelegate.swift
+        script: |
+          set -euo pipefail
+          APPD="$SRC_DIR/AppDelegate.swift"
+          
+          cat > "$APPD" <<'EOF'
+          //
+          //  AppDelegate.swift
+          //  HorizonSDKSwiftSample
+          //
+          //  Created by Stelios Petrakis on 2/25/15.
+          //  Copyright (c) 2015 Horizon Video Technologies. All rights reserved.
+          //
+
+          import UIKit
+
+          @UIApplicationMain
+          class AppDelegate: UIResponder, UIApplicationDelegate {
+
+              var window: UIWindow?
+
+              func application(_ application: UIApplication,
+                               didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+                  return true
+              }
+
+              func applicationWillResignActive(_ application: UIApplication) {
+              }
+
+              func applicationDidEnterBackground(_ application: UIApplication) {
+              }
+
+              func applicationWillEnterForeground(_ application: UIApplication) {
+              }
+
+              func applicationDidBecomeActive(_ application: UIApplication) {
+              }
+
+              func applicationWillTerminate(_ application: UIApplication) {
+              }
+          }
+          EOF
+          
+          echo "✅ AppDelegate.swift berhasil ditulis ulang"
+          echo "=== Verifikasi ==="
+          cat "$APPD"
+
+      # Step 4: Auto-migrate API in all other swift files (not AppDelegate which is already clean)
       - name: Auto-migrate deprecated Swift APIs
         script: |
           set -euo pipefail
-
-          FILES=$(find "$SRC_DIR" -type f -name "*.swift")
-          if [ -z "$FILES" ]; then
-            echo "❌ Tidak ada file .swift ditemukan di $SRC_DIR"
-            exit 1
-          fi
-
-          echo "=========================================="
-          echo "== Sebelum migrasi — scan API deprecated =="
-          echo "=========================================="
-          for f in $FILES; do
-            hits=$(grep -nE "UIApplicationLaunchOptionsKey|UIApplicationOpenURLOptionsKey|UIApplicationState[A-Z]|UIApplicationState\b|UIUserInterfaceIdiom[A-Z]|UIInterfaceOrientation[A-Z]|UIStatusBarStyle[A-Z]|UIBlurEffectStyle[A-Z]|UIBarButtonItemStyle[A-Z]|UIActivityIndicatorViewStyle[A-Z]|AVMediaType(Video|Audio)|CFString[A-Z]|NSNotification\.Name\b|NSCalendarIdentifier|UNAuthorizationOptions\b|UNNotificationPresentationOptions\b" "$f" || true)
-            if [ -n "$hits" ]; then
-              echo "--- $f ---"
-              echo "$hits"
-            fi
-          done
-          echo ""
-
-          echo "=========================================="
-          echo "== Menerapkan migrasi (perl -pi) =="
-          echo "=========================================="
-
-          # Gunakan perl (selalu tersedia di macOS) alih-alih sed
-          # karena sed -i berbeda antara BSD dan GNU.
-          #
-          # Urutan penting: yang paling spesifik dulu.
-
-          for f in $FILES; do
+          for f in $(find "$SRC_DIR" -type f -name "*.swift" ! -name "AppDelegate.swift"); do
             perl -pi -e 's/\bUIApplicationLaunchOptionsKey\b/UIApplication.LaunchOptionsKey/g' "$f"
             perl -pi -e 's/\bUIApplicationOpenURLOptionsKey\b/UIApplication.OpenURLOptionsKey/g' "$f"
-            perl -pi -e 's/\[UIApplicationState\]/[UIApplication.State]/g' "$f"
-            perl -pi -e 's/\bUIApplicationStateActive\b/UIApplication.State.active/g' "$f"
-            perl -pi -e 's/\bUIApplicationStateBackground\b/UIApplication.State.background/g' "$f"
-            perl -pi -e 's/\bUIApplicationStateInactive\b/UIApplication.State.inactive/g' "$f"
-            perl -pi -e 's/\bUIApplicationState\b/UIApplication.State/g' "$f"
-            perl -pi -e 's/\bUIUserInterfaceIdiomPad\b/UIUserInterfaceIdiom.pad/g' "$f"
-            perl -pi -e 's/\bUIUserInterfaceIdiomPhone\b/UIUserInterfaceIdiom.phone/g' "$f"
-            perl -pi -e 's/\bUIInterfaceOrientationPortrait\b/UIInterfaceOrientation.portrait/g' "$f"
-            perl -pi -e 's/\bUIInterfaceOrientationLandscapeLeft\b/UIInterfaceOrientation.landscapeLeft/g' "$f"
-            perl -pi -e 's/\bUIInterfaceOrientationLandscapeRight\b/UIInterfaceOrientation.landscapeRight/g' "$f"
-            perl -pi -e 's/\bUIStatusBarStyleDefault\b/UIStatusBarStyle.default/g' "$f"
-            perl -pi -e 's/\bUIStatusBarStyleLightContent\b/UIStatusBarStyle.lightContent/g' "$f"
             perl -pi -e 's/\bAVMediaTypeVideo\b/AVMediaType.video/g' "$f"
             perl -pi -e 's/\bAVMediaTypeAudio\b/AVMediaType.audio/g' "$f"
-            perl -pi -e 's/\bNSCalendarIdentifierGregorian\b/NSCalendar.Identifier.gregorian/g' "$f"
           done
+          echo "✅ Auto-migrate selesai"
 
-          echo ""
-          echo "=========================================="
-          echo "== Sesudah migrasi — verifikasi =="
-          echo "=========================================="
-          for f in $FILES; do
-            remaining=$(grep -nE "\bUIApplicationLaunchOptionsKey\b|\bUIApplicationOpenURLOptionsKey\b|\bUIApplicationState[A-Z]\b" "$f" || true)
-            if [ -n "$remaining" ]; then
-              echo "⚠️ Sisa API deprecated di $f:"
-              echo "$remaining"
-            fi
-          done
-          echo "✅ Auto-migrasi selesai"
-
-      # ============================================================
-      # STEP 4: DETEKSI SCHEME / TARGET
-      # ============================================================
+      # Step 5: Detect scheme
       - name: Detect build scheme
         script: |
           set -euo pipefail
-
-          echo "=========================================="
-          echo "== Deteksi scheme =="
-          echo "=========================================="
-
           SCHEME=$(xcodebuild -project "$PROJECT_PATH" -list 2>/dev/null \
             | awk '/Schemes:/{flag=1; next} /^$/{flag=0} flag' \
             | sed 's/^[[:space:]]*//' \
             | grep -v '^$' \
             | head -1)
-
-          if [ -z "$SCHEME" ]; then
-            echo "⚠️ Tidak ada scheme terdeteksi, mencoba target..."
-            SCHEME=""
-          else
-            echo "✅ Scheme ditemukan: $SCHEME"
-          fi
-
-          # Simpan ke file agar step berikut bisa membacanya
+          
           mkdir -p "$CM_BUILD_DIR/.build_meta"
           if [ -n "$SCHEME" ]; then
             echo "MODE=scheme" > "$CM_BUILD_DIR/.build_meta/detect.env"
@@ -155,21 +110,14 @@ workflows:
             echo "MODE=target" > "$CM_BUILD_DIR/.build_meta/detect.env"
             echo "SCHEME=HorizonSDK-Swift" >> "$CM_BUILD_DIR/.build_meta/detect.env"
           fi
-
           cat "$CM_BUILD_DIR/.build_meta/detect.env"
 
-      # ============================================================
-      # STEP 5: BUILD UNSIGNED
-      # ============================================================
+      # Step 6: Build unsigned
       - name: Build unsigned .app
         script: |
           set -euo pipefail
-
           source "$CM_BUILD_DIR/.build_meta/detect.env"
-          echo "=========================================="
-          echo "== Build mode: $MODE / scheme-or-target: $SCHEME =="
-          echo "=========================================="
-
+          
           COMMON_ARGS=(
             -project "$PROJECT_PATH"
             -configuration Release
@@ -183,16 +131,12 @@ workflows:
             ONLY_ACTIVE_ARCH=NO
             ENABLE_BITCODE=NO
             DEBUG_INFORMATION_FORMAT=dwarf
+            FRAMEWORK_SEARCH_PATHS="$(pwd)/HorizonSDK $(pwd)/Examples/SwiftHorizonSDKDemo/SwiftHorizonSDKDemo"
           )
-
+          
           if [ "$MODE" = "scheme" ]; then
-            echo "▶ Menggunakan -scheme \"$SCHEME\" dengan -destination generic/platform=iOS"
-            xcodebuild build \
-              "${COMMON_ARGS[@]}" \
-              -scheme "$SCHEME" \
-              -destination 'generic/platform=iOS'
+            xcodebuild build "${COMMON_ARGS[@]}" -scheme "$SCHEME" -destination 'generic/platform=iOS'
           else
-            echo "▶ Menggunakan -target \"$SCHEME\" dengan SYMROOT (fallback)"
             xcodebuild build \
               -project "$PROJECT_PATH" \
               -target "$SCHEME" \
@@ -207,101 +151,48 @@ workflows:
               IPHONEOS_DEPLOYMENT_TARGET=15.0 \
               ONLY_ACTIVE_ARCH=NO \
               ENABLE_BITCODE=NO \
-              DEBUG_INFORMATION_FORMAT=dwarf
+              DEBUG_INFORMATION_FORMAT=dwarf \
+              FRAMEWORK_SEARCH_PATHS="$(pwd)/HorizonSDK $(pwd)/Examples/SwiftHorizonSDKDemo/SwiftHorizonSDKDemo"
           fi
 
-      # ============================================================
-      # STEP 6: VALIDASI UNSIGNED + STRIP SIGNATURE RESIDU
-      # ============================================================
+      # Step 7: Clean signature
       - name: Verify and clean signature
         script: |
           set -euo pipefail
-
-          echo "=========================================="
-          echo "== Cari .app yang dihasilkan =="
-          echo "=========================================="
-          ls -la build/Build/Products/Release-iphoneos/ 2>/dev/null || true
-
           APP_PATH=$(find build/Build/Products -name "*.app" -maxdepth 4 -type d 2>/dev/null | head -1)
           if [ -z "$APP_PATH" ]; then
-            echo "❌ Tidak ada .app ditemukan di build/Build/Products/"
-            echo "Isi folder build:"
-            find build -type d 2>/dev/null | head -30 || true
+            echo "❌ .app tidak ditemukan"
+            find build -type d | head -20 || true
             exit 1
           fi
-
           echo "✅ App: $APP_PATH"
-
-          # Hapus residu signature jika ada (Xcode kadang meninggalkan ini)
-          if [ -d "$APP_PATH/_CodeSignature" ]; then
-            echo "⚠️ Menghapus residu _CodeSignature"
-            rm -rf "$APP_PATH/_CodeSignature"
-          fi
-          if [ -f "$APP_PATH/embedded.mobileprovision" ]; then
-            echo "⚠️ Menghapus residu embedded.mobileprovision"
-            rm -f "$APP_PATH/embedded.mobileprovision"
-          fi
-          # Hapus signature di embedded frameworks juga
+          
+          rm -rf "$APP_PATH/_CodeSignature"
+          rm -f "$APP_PATH/embedded.mobileprovision"
           if [ -d "$APP_PATH/Frameworks" ]; then
             find "$APP_PATH/Frameworks" -name "_CodeSignature" -type d -exec rm -rf {} + 2>/dev/null || true
           fi
+          echo "✅ Signature dibersihkan"
 
-          echo "✅ Verifikasi akhir:"
-          ls -la "$APP_PATH" | grep -E "CodeSignature|mobileprovision" || \
-            echo "✅ Tidak ada residu signature"
-
-      # ============================================================
-      # STEP 7: PACKAGE IPA
-      # ============================================================
+      # Step 8: Package IPA
       - name: Package unsigned IPA
         script: |
           set -euo pipefail
-
           APP_PATH=$(find build/Build/Products -name "*.app" -maxdepth 4 -type d 2>/dev/null | head -1)
-          if [ -z "$APP_PATH" ]; then
-            echo "❌ .app tidak ditemukan untuk packaging"
-            exit 1
-          fi
-
           APP_NAME=$(basename "$APP_PATH" .app)
           IPA_NAME="${APP_NAME}-unsigned.ipa"
-
-          echo "=========================================="
-          echo "== Membuat IPA: $IPA_NAME =="
-          echo "=========================================="
-
+          
           rm -rf Payload
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
-
-          # Pastikan tidak ada residu signature di Payload juga
+          
           find Payload -name "_CodeSignature" -type d -exec rm -rf {} + 2>/dev/null || true
           find Payload -name "embedded.mobileprovision" -type f -delete 2>/dev/null || true
-
+          
           zip -rq "$IPA_NAME" Payload
-
-          echo "✅ IPA dibuat:"
+          echo "✅ IPA: $IPA_NAME"
           ls -la "$IPA_NAME"
-
-          # Verifikasi struktur IPA
-          echo ""
-          echo "== Struktur IPA (top-level) =="
-          unzip -l "$IPA_NAME" | head -10
-
-          echo ""
-          echo "== File di dalam Payload/ =="
-          unzip -l "$IPA_NAME" | grep "Payload/" | head -5
 
     artifacts:
       - "*.ipa"
-      - build/Build/Products/Release-iphoneos/*.app
-      - build/Build/Products/Release-iphoneos/**/*.dSYM
       - /tmp/xcodebuild_logs/*.log
-
-    publishing:
-      email:
-        recipients:
-          - your-email@example.com   # GANTI dengan email Anda
-        notify:
-          success: true
-          failure: true
