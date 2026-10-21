@@ -6,20 +6,78 @@ workflows:
     environment:
       xcode: 26.4
       cocoapods: default
+
     scripts:
-      - name: Build the .app
+      # 1. Diagnosis: tampilkan scheme & target yang tersedia di log
+      - name: Diagnose project structure
         script: |
-          xcodebuild build \
+          echo "=========================================="
+          echo "== Available schemes and targets =="
+          echo "=========================================="
+          xcodebuild \
             -project "Examples/SwiftHorizonSDKDemo/SwiftHorizonSDKDemo.xcodeproj" \
-            -target "HorizonSDK-Swift" \
+            -list || true
+
+      # 2. Build unsigned .app menggunakan SCHEME (bukan target)
+      - name: Build unsigned .app
+        script: |
+          set -euo pipefail
+
+          PROJECT="Examples/SwiftHorizonSDKDemo/SwiftHorizonSDKDemo.xcodeproj"
+
+          # Deteksi scheme pertama dari xcodebuild -list secara otomatis
+          SCHEME=$(xcodebuild -project "$PROJECT" -list 2>/dev/null \
+            | sed -n '/Schemes:/,/^$/p' \
+            | grep -v "Schemes:" \
+            | sed 's/^[[:space:]]*//' \
+            | grep -v '^$' \
+            | head -1)
+
+          if [ -z "$SCHEME" ]; then
+            echo "❌ Tidak ada scheme yang terdeteksi. Cek log diagnosa di atas."
+            exit 1
+          fi
+
+          echo "✅ Menggunakan scheme: $SCHEME"
+
+          xcodebuild build \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
             -configuration Release \
-            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -derivedDataPath build \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             SWIFT_VERSION=5.0 \
-            IPHONEOS_DEPLOYMENT_TARGET=15.0
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
+            ONLY_ACTIVE_ARCH=NO
+
+      # 3. Package ke IPA otomatis — tidak perlu zip manual
+      - name: Package unsigned IPA
+        script: |
+          set -euo pipefail
+
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+
+          if [ -z "$APP_PATH" ]; then
+            echo "❌ File .app tidak ditemukan. Isi direktori:"
+            ls -la build/Build/Products/Release-iphoneos/ || true
+            exit 1
+          fi
+
+          APP_NAME=$(basename "$APP_PATH" .app)
+          echo "✅ Menemukan app: $APP_NAME"
+
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -rq "${APP_NAME}-unsigned.ipa" Payload
+
+          echo "✅ IPA dibuat: ${APP_NAME}-unsigned.ipa"
+          ls -la *.ipa
+
     artifacts:
+      - "*.ipa"
       - build/Build/Products/Release-iphoneos/*.app
       - /tmp/xcodebuild_logs/*.log
