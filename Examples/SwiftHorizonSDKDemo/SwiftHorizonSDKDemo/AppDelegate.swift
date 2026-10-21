@@ -1,45 +1,11 @@
 //
 //  AppDelegate.swift
-//  HorizonSDKSwiftSample
+//  SwiftHorizonSDKDemo
 //
-//  Created by Stelios Petrakis on 2/25/15.
-//  Copyright (c) 2015 Horizon Video Technologies. All rights reserved.
-//
-//
-//  AppDelegate.swift
-//  HorizonSDKSwiftSample
-//
-//  Created by Stelios Petrakis on 2/25/15.
+//  Created by Stelios Petrakis on 8/15/15.
 //  Copyright (c) 2015 Horizon Video Technologies. All rights reserved.
 //
 
-import UIKit
-
-@UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate {
-
-    var window: UIWindow?
-
-    func application(_ application: UIApplication,
-                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-        return true
-    }
-
-    func applicationWillResignActive(_ application: UIApplication) {
-    }
-
-    func applicationDidEnterBackground(_ application: UIApplication) {
-    }
-
-    func applicationWillEnterForeground(_ application: UIApplication) {
-    }
-
-    func applicationDidBecomeActive(_ application: UIApplication) {
-    }
-
-    func applicationWillTerminate(_ application: UIApplication) {
-    }
-}
 import UIKit
 import HorizonSDK
 
@@ -48,27 +14,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
 
-    func application(_ application: UIApplication,
-                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
 
-        if let manager = HorizonSDKManager.shared() {
-            manager.application(application, didFinishLaunchingWithOptions: launchOptions)
+        do {
+            try HVTSDK.sharedInstance().activate(withAPIKey: "QMCA6kLDQGpK4c92SfmBK7Kr9dNxwekmLCZKYKb4x3Q+OcFQ/iZS8MH2V5xW/0lLkY9JTY3c8UtvV+PDLvRkBWNvbS5odnQuSG9yaXpvblNESy1Td2lmdHxDVQ==")
+        } catch {
+            print("Horizon SDK activation failed: \(error)")
         }
+
         return true
     }
 
-    func applicationWillResignActive(_ application: UIApplication) {
-    }
-
-    func applicationDidEnterBackground(_ application: UIApplication) {
-    }
-
-    func applicationWillEnterForeground(_ application: UIApplication) {
-    }
-
-    func applicationDidBecomeActive(_ application: UIApplication) {
-    }
-
-    func applicationWillTerminate(_ application: UIApplication) {
-    }
 }
