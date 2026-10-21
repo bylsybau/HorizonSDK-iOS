@@ -1,0 +1,25 @@
+workflows:
+  ios-unsigned-build:
+    name: iOS Unsigned Build
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    environment:
+      xcode: 26.4
+      cocoapods: default
+    scripts:
+      - name: Build the .app
+        script: |
+          xcodebuild build \
+            -project "Examples/SwiftHorizonSDKDemo/SwiftHorizonSDKDemo.xcodeproj" \
+            -target "HorizonSDK-Swift" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            SWIFT_VERSION=5.0 \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0
+    artifacts:
+      - build/Build/Products/Release-iphoneos/*.app
+      - /tmp/xcodebuild_logs/*.log
